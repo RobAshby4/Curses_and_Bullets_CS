@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading;
 using Mindmagma.Curses;
 
 namespace Curses_and_Bullets
@@ -13,6 +12,18 @@ namespace Curses_and_Bullets
         private static int BoxHeight = 48;
 
         private static readonly Random rng = new Random();
+
+        private struct Planet 
+        {
+            public Planet(int x, int y, string pstr){
+                X = x;
+                Y = y;
+                planet = pstr;
+            }
+            public int X  {set; get;}
+            public int Y {set; get;}
+            public string planet {set; get;}
+        }
 
         static void Main(string[] args)
         {
@@ -39,18 +50,18 @@ namespace Curses_and_Bullets
             NCurses.NoDelay(Screen, true);
             NCurses.NoEcho();
             NCurses.SetCursor(0);
-            string[] BackScreen = StarScreenInit();
+            Planet[] bg = BackgroundInit(lines, cols);
 
             while (NCurses.GetChar() == -1)
             {   
                 frames++;
                 NCurses.Clear();
-                StarScreen(BackScreen, lines, cols);
+                Background(bg, lines, cols);
                 Box(lines, cols);
                 NCurses.MoveAddString(lines/2 - 1, cols/2 - message.Length / 2, message);
                 NCurses.MoveAddString(0,0, frames.ToString());
-                NCurses.Refresh();
                 NCurses.Nap(50);
+                NCurses.Refresh();
             }
         }
 
@@ -68,47 +79,69 @@ namespace Curses_and_Bullets
             }
         }
 
-        private static string[] StarScreenInit()
+        private static Planet[] BackgroundInit(int l, int c)
         {
-            
-            string[] sArray = new string[BoxHeight];
-            for(int i = 0; i < BoxHeight; i++)
+            int PlanetNum = 4;
+            Planet[] planets = new Planet[PlanetNum];
+            for(int i = 0; i < PlanetNum; i++)
             {
-                char[] charArray = new char [BoxWidth];
-                for(int j = 0; j < BoxWidth; j++)
+                planets[i] = PlanetGenerator(l, c);
+            }
+            return planets;
+        }
+        
+        private static Planet PlanetGenerator(int l, int c)
+        {
+            string planet1 = "( 0 )";
+            string planet2 = "-@-";
+            string planet3 = "=%=";
+            string planet4 = "/0/";
+
+            Planet planet;
+
+            int rngNum = rng.Next(4);
+            switch(rngNum)
+            {
+                case < 1:
+                    planet = new Planet(0, 0, planet1);
+                    break;
+                
+                case < 2:
+                    planet = new Planet(0, 0, planet2);
+                    break;
+                
+                case < 3:
+                    planet = new Planet(0, 0, planet3);
+                    break;
+                
+                case < 4:
+                    planet = new Planet(0, 0, planet4);
+                    break;
+
+                default:
+                    planet = new Planet(0, 0, planet4);
+                    break;
+            }
+            int rngX = rng.Next(BoxWidth) - 4;
+            int rngY = rng.Next(BoxHeight) - 1;
+            planet.X = c/2 - BoxWidth/2 + 1 + (rngX);
+            planet.Y = l/2 - BoxHeight/2 + (rngY);
+            return planet;
+        }
+
+        private static void Background(Planet[] pArray, int l, int c)
+        {
+            for(int i = 0; i < pArray.Length; i++)
+            {
+                NCurses.MoveAddString(pArray[i].Y, pArray[i].X, pArray[i].planet);
+                pArray[i].Y++;
+
+                if(pArray[i].Y > l/2 + BoxHeight/2)
                 {
-                    int rngCheck = rng.Next(50);
-                    if(rngCheck == 1)
-                    {
-                        charArray[j] = '%';
-                    }
-                    else 
-                    {
-                        charArray[j] = ' ';
-                    }
+                    pArray[i] = PlanetGenerator(l, c);
+                    pArray[i].Y = l/2 - BoxHeight/2;
                 }
-                sArray[i] = new string(charArray); 
             }
-
-            return sArray;
         }
-
-        private static void StarScreen(string[] backScreen, int l, int c)
-        {
-            int leftBound = c/2 - BoxWidth/2;
-            int topBound = l/2 - BoxHeight/2;
-            
-            for(int i = 0; i < BoxHeight; i++)
-            {
-                NCurses.MoveAddString(topBound + i, leftBound, backScreen[i]);
-            }
-            string bufstr = backScreen[BoxHeight - 1];
-            for(int i = BoxHeight - 1; i > 0; i--)
-            {
-                backScreen[i] = backScreen[i - 1];
-            }
-            backScreen[0] = bufstr;
-        }
-
     }
 }
