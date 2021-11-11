@@ -1,8 +1,27 @@
 ﻿using System;
+using System.Collections.Generic;
 using Mindmagma.Curses;
 
 namespace Curses_and_Bullets
 {
+    public class Bullet
+    {
+        public Bullet(int x, int y, char bstr, int bt)
+        {
+            X = x;
+            Y = y;
+            bmodel = bstr;
+            btype = bt;
+            removeb = false;
+        }
+
+        public int X  {set; get;}
+        public int Y {set; get;}
+        public char bmodel {set; get;}
+        public int btype {set; get;}
+        public bool removeb {set; get;}
+    }
+
     class Program
     {
         private static IntPtr Screen;
@@ -11,11 +30,30 @@ namespace Curses_and_Bullets
         
         private static int BoxHeight = 48;
 
+        private int LeftBound = NCurses.Columns/2 - BoxWidth/2;
+
+        private int TopBound = NCurses.Lines/2 - BoxHeight/2;
+        
+        private string[] BoxString = new string[50];
+
         private static readonly Random rng = new Random();
+
+        private static readonly short[] color_table = {
+            CursesColor.BLACK,
+            CursesColor.RED,
+            CursesColor.BLUE,
+            CursesColor.GREEN,
+            CursesColor.CYAN,
+            CursesColor.RED,
+            CursesColor.MAGENTA,
+            CursesColor.YELLOW,
+            CursesColor.WHITE
+        };
 
         private struct Planet 
         {
-            public Planet(int x, int y, string pstr){
+            public Planet(int x, int y, string pstr)
+	    {
                 X = x;
                 Y = y;
                 planet = pstr;
@@ -24,6 +62,28 @@ namespace Curses_and_Bullets
             public int Y {set; get;}
             public string planet {set; get;}
         }
+        
+        private struct Player 
+        {
+            public Player(int x, int y, string pstr)
+	    {
+                X = x;
+                Y = y;
+                pmodel = pstr;
+                shooting = false;
+                btype = 1;
+            }
+            public int X  {set; get;}
+            public int Y {set; get;}
+            public string pmodel {set; get;}
+            public bool shooting {set; get;}
+            public int btype {set; get;}
+        }
+
+
+        private Player PC = new Player(0, 0, "/|\\");
+
+        List<Bullet> bullets = new List<Bullet>();
 
         static void Main(string[] args)
         {
@@ -31,7 +91,8 @@ namespace Curses_and_Bullets
 
             try
             {
-                Loop();
+                Program loop = new Program();
+                loop.Loop();
             }
             finally
             {
@@ -40,46 +101,129 @@ namespace Curses_and_Bullets
             }
         }
 
-        private static void Loop()
+        private void Loop()
         {
-            string message = "Hello Curses!";
+            BoxString[0] = "################################################################\n";
+            BoxString[49] = "################################################################\n";
+            for(int i = 1; i < 49; i++)
+            {
+                BoxString[i] = "#                                                              #\n" ;
+            }
+
+            if(NCurses.HasColors())
+            {
+                NCurses.StartColor();
+                for (short i = 1; i < 9; i++)
+                {
+                    NCurses.InitPair(i, color_table[i], CursesColor.BLACK);
+                }
+            }
+
+            Console.TreatControlCAsInput = true;
             int lines = NCurses.Lines;
             int cols = NCurses.Columns;
             int frames = 0;            
+            int quit = 0;
 
             NCurses.NoDelay(Screen, true);
             NCurses.NoEcho();
             NCurses.SetCursor(0);
             Planet[] bg = BackgroundInit(lines, cols);
-
-            while (NCurses.GetChar() == -1)
+            PC.X = cols/2;
+            PC.Y = lines/2;
+            ConsoleKeyInfo cki;
+            while (quit != -1)
             {   
                 frames++;
                 NCurses.Clear();
-                Background(bg, lines, cols);
                 Box(lines, cols);
-                NCurses.MoveAddString(lines/2 - 1, cols/2 - message.Length / 2, message);
+                Background(bg, lines, cols);
                 NCurses.MoveAddString(0,0, frames.ToString());
                 NCurses.Nap(50);
+                if(Console.KeyAvailable == true)
+                {
+                    cki = Console.ReadKey(true);
+                    quit = PMovement(cki);                
+                }
+                NCurses.MoveAddString(PC.Y, PC.X, PC.pmodel);
+                RenderBullets();
                 NCurses.Refresh();
             }
         }
 
-        private static void Box(int l, int c)
+        private void RenderBullets()
         {
-            string topBottom = "################################################################";
-            int leftBound = c/2 - BoxWidth/2;
-            int topBound = l/2 - BoxHeight/2;
-            NCurses.MoveAddString(topBound, leftBound, topBottom);
-            NCurses.MoveAddString(topBound + BoxHeight, leftBound, topBottom);
-            for(int i = 1; i < BoxHeight; i++)
+            if(PC.shooting == true){
+                bullets.Add(new Bullet(PC.X + 1, PC.Y - 1, '*', 1));
+            }
+            foreach(var aBullet in bullets)
             {
-                NCurses.MoveAddChar(topBound + i, leftBound, '#');
-                NCurses.MoveAddChar(topBound + i, leftBound + BoxWidth - 1, '#');
+                NCurses.MoveAddChar(aBullet.Y, aBullet.X, aBullet.bmodel);
+                switch(aBullet.btype)
+                {
+                    case 1:
+                        if(aBullet.Y - 1 > TopBound)
+                            aBullet.Y -= 1;
+                        else{
+                            aBullet.removeb = true;
+                        }
+                        break;
+
+                    default:
+                        break;
+                }
+            }
+            bullets.RemoveAll(b => b.removeb == true);
+        }
+
+        private int PMovement(ConsoleKeyInfo cki)
+        {
+            switch(cki.Key.ToString()){
+                case "UpArrow":
+                    if(PC.Y - 1 != TopBound)
+                        PC.Y -= 1;
+                    return 0;
+                
+                case "DownArrow":
+                    if(PC.Y + 1 != TopBound + 49)
+                        PC.Y += 1;
+                    return 0;
+                
+                case "LeftArrow":
+                    if(PC.X  - 2 > LeftBound)
+                        PC.X -= 2;
+                    return 0;
+                
+                case "RightArrow":
+                    if(PC.X  + 2 < LeftBound + 61)
+                        PC.X += 2;
+                    return 0;
+                
+                case "Q":
+                    return -1;
+                
+                case "Z":
+                    if(PC.shooting == true){
+                        PC.shooting = false;
+                        return 0;
+                    }
+                    PC.shooting = true;
+                    return 0;
+                
+                default:
+                    return 0;
             }
         }
 
-        private static Planet[] BackgroundInit(int l, int c)
+        private void Box(int l, int c)
+        {
+            for(int i = 0; i < 50; i++)
+            {
+                NCurses.MoveAddString(TopBound + i, LeftBound, BoxString[i]);
+            }
+        }
+
+        private Planet[] BackgroundInit(int l, int c)
         {
             int PlanetNum = 4;
             Planet[] planets = new Planet[PlanetNum];
@@ -90,7 +234,7 @@ namespace Curses_and_Bullets
             return planets;
         }
         
-        private static Planet PlanetGenerator(int l, int c)
+        private Planet PlanetGenerator(int l, int c)
         {
             string planet1 = "( 0 )";
             string planet2 = "-@-";
@@ -122,24 +266,25 @@ namespace Curses_and_Bullets
                     planet = new Planet(0, 0, planet4);
                     break;
             }
-            int rngX = rng.Next(BoxWidth) - 4;
-            int rngY = rng.Next(BoxHeight) - 1;
-            planet.X = c/2 - BoxWidth/2 + 1 + (rngX);
-            planet.Y = l/2 - BoxHeight/2 + (rngY);
+            int rngX = rng.Next(BoxWidth - 5);
+            int rngY = rng.Next(BoxHeight - 1);
+            planet.X = LeftBound + 1 + (rngX);
+            planet.Y = TopBound + 1 + (rngY);
             return planet;
         }
-
-        private static void Background(Planet[] pArray, int l, int c)
+        private void Background(Planet[] pArray, int l, int c)
         {
             for(int i = 0; i < pArray.Length; i++)
             {
+                NCurses.AttributeOn(NCurses.ColorPair(5));
                 NCurses.MoveAddString(pArray[i].Y, pArray[i].X, pArray[i].planet);
+                NCurses.AttributeOff(NCurses.ColorPair(6));
                 pArray[i].Y++;
 
                 if(pArray[i].Y > l/2 + BoxHeight/2)
                 {
                     pArray[i] = PlanetGenerator(l, c);
-                    pArray[i].Y = l/2 - BoxHeight/2;
+                    pArray[i].Y = TopBound + 1;
                 }
             }
         }
