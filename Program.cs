@@ -6,13 +6,14 @@ namespace Curses_and_Bullets
 {
     public class Bullet
     {
-        public Bullet(int x, int y, char bstr, int bt)
+        public Bullet(int x, int y, char bstr, int bt, bool powned)
         {
             X = x;
             Y = y;
             bmodel = bstr;
             btype = bt;
             removeb = false;
+            powner = powned;
         }
 
         public int X  {set; get;}
@@ -20,11 +21,14 @@ namespace Curses_and_Bullets
         public char bmodel {set; get;}
         public int btype {set; get;}
         public bool removeb {set; get;}
+        public bool powner {set; get;}
     }
 
     class Program
     {
         private static IntPtr Screen;
+        
+        private int frames = 0;
 
         private static int BoxWidth = 64;
         
@@ -35,6 +39,8 @@ namespace Curses_and_Bullets
         private int TopBound = NCurses.Lines/2 - BoxHeight/2;
         
         private string[] BoxString = new string[50];
+
+        public int Ammo = 49;
 
         private static readonly Random rng = new Random();
 
@@ -72,22 +78,30 @@ namespace Curses_and_Bullets
                 pmodel = pstr;
                 shooting = false;
                 btype = 1;
+                bfired = 0;
             }
             public int X  {set; get;}
             public int Y {set; get;}
             public string pmodel {set; get;}
             public bool shooting {set; get;}
             public int btype {set; get;}
+            public int bfired {set; get;}
         }
 
 
         private Player PC = new Player(0, 0, "/|\\");
 
-        List<Bullet> bullets = new List<Bullet>();
+        public List<Bullet> bullets = new List<Bullet>();
 
         static void Main(string[] args)
         {
             Screen = NCurses.InitScreen();
+            
+            if(NCurses.Lines < 50 || NCurses.Columns < 80){
+                NCurses.EndWin();
+                Console.WriteLine("Terminal must be at least 50L and 80C");
+                System.Environment.Exit(1);
+            }
 
             try
             {
@@ -121,8 +135,7 @@ namespace Curses_and_Bullets
 
             Console.TreatControlCAsInput = true;
             int lines = NCurses.Lines;
-            int cols = NCurses.Columns;
-            int frames = 0;            
+            int cols = NCurses.Columns;          
             int quit = 0;
 
             NCurses.NoDelay(Screen, true);
@@ -139,6 +152,9 @@ namespace Curses_and_Bullets
                 Box(lines, cols);
                 Background(bg, lines, cols);
                 NCurses.MoveAddString(0,0, frames.ToString());
+                NCurses.MoveAddString(1,0, PC.shooting.ToString());
+                NCurses.MoveAddString(2,0, PC.bfired.ToString());
+                NCurses.MoveAddString(3,0, Ammo.ToString());
                 NCurses.Nap(50);
                 if(Console.KeyAvailable == true)
                 {
@@ -147,15 +163,44 @@ namespace Curses_and_Bullets
                 }
                 NCurses.MoveAddString(PC.Y, PC.X, PC.pmodel);
                 RenderBullets();
+                RenderAmmo();
                 NCurses.Refresh();
+            }
+        }
+
+        private void RenderAmmo()
+        {
+            NCurses.MoveAddString(TopBound, LeftBound - 6, "Ammo");
+            for (int i = 0; i < Ammo ; i++)
+            {
+                NCurses.MoveAddString(TopBound + i + 1, LeftBound - 5, "[*]");
             }
         }
 
         private void RenderBullets()
         {
-            if(PC.shooting == true){
-                bullets.Add(new Bullet(PC.X + 1, PC.Y - 1, '*', 1));
+            if(PC.bfired >= 3)
+            {
+                PC.shooting = false;
+                PC.bfired = 0;
             }
+            if(Ammo <= 0)
+            {
+                PC.shooting = false;
+                Ammo = 0;
+                PC.bfired = 0;
+            } 
+            if(PC.shooting == true && Ammo > 0 && PC.bfired < 3)
+            {
+                bullets.Add(new Bullet(PC.X + 1, PC.Y - 1, '*', 1, true));
+                PC.bfired++;
+                Ammo--;   
+            }
+            else if(Ammo < 49 && frames % 4 == 0)
+            {
+                Ammo++;
+            }
+            NCurses.AttributeOn(NCurses.ColorPair(7));
             foreach(var aBullet in bullets)
             {
                 NCurses.MoveAddChar(aBullet.Y, aBullet.X, aBullet.bmodel);
@@ -174,6 +219,7 @@ namespace Curses_and_Bullets
                 }
             }
             bullets.RemoveAll(b => b.removeb == true);
+            NCurses.AttributeOff(NCurses.ColorPair(7));
         }
 
         private int PMovement(ConsoleKeyInfo cki)
@@ -203,11 +249,11 @@ namespace Curses_and_Bullets
                     return -1;
                 
                 case "Z":
-                    if(PC.shooting == true){
-                        PC.shooting = false;
-                        return 0;
+                    if(Ammo > 2)
+                    {
+                        PC.shooting = true;
+                        PC.bfired = 0;
                     }
-                    PC.shooting = true;
                     return 0;
                 
                 default:
@@ -279,7 +325,10 @@ namespace Curses_and_Bullets
                 NCurses.AttributeOn(NCurses.ColorPair(5));
                 NCurses.MoveAddString(pArray[i].Y, pArray[i].X, pArray[i].planet);
                 NCurses.AttributeOff(NCurses.ColorPair(6));
-                pArray[i].Y++;
+                if(frames % 3 == 0)
+                {
+                    pArray[i].Y++;
+                }
 
                 if(pArray[i].Y > l/2 + BoxHeight/2)
                 {
